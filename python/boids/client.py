@@ -8,7 +8,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 DEFAULT_BASE_URL = "https://api.boids.so/v1"
-USER_AGENT = "boids-python/0.1.1"
+USER_AGENT = "boids-python/0.1.2"
 
 
 class BoidsError(Exception):
