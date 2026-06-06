@@ -19,13 +19,13 @@ const client = new Boids({
       body,
     });
 
-    assert.equal(url, "http://mock.test/v1/chat/complete");
+    assert.equal(url, "http://mock.test/v1/responses");
     assert.equal(init.headers.Authorization, "Bearer test-key");
 
     if (body.stream) {
       return new Response(
-        'event: chat.delta\ndata: {"delta": "Hello"}\n\n' +
-          'event: chat.completed\ndata: {"id": "chat_123", "output_text": "Hello"}\n\n' +
+        'event: response.output_text.delta\ndata: {"delta": "Hello"}\n\n' +
+          'event: response.completed\ndata: {"id": "resp_123", "output_text": "Hello"}\n\n' +
           "data: [DONE]\n\n",
         { status: 200, headers: { "Content-Type": "text/event-stream" } },
       );
@@ -33,29 +33,27 @@ const client = new Boids({
 
     return new Response(
       JSON.stringify({
-        id: "chat_123",
-        message: { role: "assistant", content: "Hello" },
+        id: "resp_123",
+        output_text: "Hello",
       }),
       { status: 200, headers: { "Content-Type": "application/json" } },
     );
   },
 });
 
-const messages = [{ role: "user", content: "Say hello" }];
-
-const response = await client.chat.complete({
+const response = await client.responses.create({
   model: "agent:test",
-  messages,
+  input: "Say hello",
   temperature: 0.2,
 });
-console.log("[sdk complete]", JSON.stringify(response));
-assert.equal(response.id, "chat_123");
-assert.equal(response.message.content, "Hello");
+console.log("[sdk create]", JSON.stringify(response));
+assert.equal(response.id, "resp_123");
+assert.equal(response.output_text, "Hello");
 
 const events = [];
-for await (const event of client.chat.complete({
+for await (const event of client.responses.create({
   model: "agent:test",
-  messages,
+  input: "Say hello",
   stream: true,
 })) {
   events.push(event);
@@ -64,14 +62,14 @@ for await (const event of client.chat.complete({
 console.log("[sdk stream]", JSON.stringify(events));
 assert.deepEqual(
   events.map((event) => event.event),
-  ["chat.delta", "chat.completed"],
+  ["response.output_text.delta", "response.completed"],
 );
 assert.equal(events[0].data.delta, "Hello");
-assert.equal(events[1].data.id, "chat_123");
+assert.equal(events[1].data.id, "resp_123");
 
 assert.equal(calls.length, 2);
 assert.equal(calls[0].body.model, "agent:test");
-assert.deepEqual(calls[0].body.messages, messages);
+assert.equal(calls[0].body.input, "Say hello");
 assert.equal(calls[0].body.stream, undefined);
 assert.equal(calls[0].body.temperature, 0.2);
 assert.equal(calls[1].body.stream, true);
@@ -92,14 +90,14 @@ const server = createServer((request, response) => {
       body,
     });
 
-    assert.equal(request.url, "/chat/complete");
+    assert.equal(request.url, "/responses");
     assert.equal(request.headers.authorization, "Bearer test-key");
 
     response.setHeader("Content-Type", "application/json");
     response.end(
       JSON.stringify({
-        id: "chat_cli_123",
-        message: { role: "assistant", content: "Hello from CLI" },
+        id: "resp_cli_123",
+        output_text: "Hello from CLI",
       }),
     );
   });
@@ -113,7 +111,8 @@ try {
   const { port } = server.address();
   const cli = await runCommand(process.execPath, [
     resolve(repoRoot, "js/bin/boids.js"),
-    "chat",
+    "responses",
+    "create",
     "--api-key",
     "test-key",
     "--base-url",
@@ -127,11 +126,11 @@ try {
 
   assert.equal(cli.status, 0, cli.stderr);
   const cliResponse = JSON.parse(cli.stdout);
-  console.log("[cli chat]", JSON.stringify(cliResponse));
-  assert.equal(cliResponse.id, "chat_cli_123");
+  console.log("[cli responses create]", JSON.stringify(cliResponse));
+  assert.equal(cliResponse.id, "resp_cli_123");
   assert.equal(cliRecords.length, 1);
   assert.equal(cliRecords[0].body.model, "agent:test");
-  assert.deepEqual(cliRecords[0].body.messages, [{ role: "user", content: "Say hello" }]);
+  assert.equal(cliRecords[0].body.input, "Say hello");
   assert.equal(cliRecords[0].body.stream, false);
 } finally {
   await new Promise((resolveClose) => {
@@ -139,7 +138,7 @@ try {
   });
 }
 
-console.log("js chat/complete test passed");
+console.log("js responses test passed");
 
 function runCommand(command, args) {
   return new Promise((resolveCommand, reject) => {

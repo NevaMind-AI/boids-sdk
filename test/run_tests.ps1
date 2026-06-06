@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 $ErrorActionPreference = "Stop"
 
-$RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
+$TestDir = $PSScriptRoot
 
 function Resolve-TestCommand {
   param(
@@ -33,18 +33,21 @@ $Python = Resolve-TestCommand -EnvName "PYTHON" -Names @("python", "py")
 $Node = Resolve-TestCommand -EnvName "NODE" -Names @("node")
 $Go = Resolve-TestCommand -EnvName "GO" -Names @("go") -Optional
 
-& $Python (Join-Path $RepoRoot "test\python_chat_complete.py")
-& $Node (Join-Path $RepoRoot "test\js_chat_complete.mjs")
+& $Python (Join-Path $TestDir "python_chat_complete.py")
+& $Python (Join-Path $TestDir "python_response.py")
+& $Node (Join-Path $TestDir "js_chat_complete.mjs")
+& $Node (Join-Path $TestDir "js_response.mjs")
 
 if ($Go) {
-  Push-Location (Join-Path $RepoRoot "test")
+  Push-Location $TestDir
   try {
     & $Go run .\go_chat_complete.go
+    & $Go run .\go_response.go
   }
   finally {
     Pop-Location
   }
 }
 else {
-  Write-Warning "Skipping Go chat/complete test because Go was not found. Set GO to run it."
+  Write-Warning "Skipping Go tests because Go was not found. Set GO to run them."
 }

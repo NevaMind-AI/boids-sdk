@@ -25,7 +25,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	fmt.Println("go chat/complete test passed")
+	fmt.Println("go responses test passed")
 }
 
 func run() error {
@@ -43,7 +43,7 @@ func run() error {
 			body:          body,
 		})
 
-		if r.URL.Path != "/chat/complete" {
+		if r.URL.Path != "/responses" {
 			http.NotFound(w, r)
 			return
 		}
@@ -55,46 +55,44 @@ func run() error {
 		streaming, _ := body["stream"].(bool)
 		if streaming {
 			w.Header().Set("Content-Type", "text/event-stream")
-			fmt.Fprint(w, "event: chat.delta\ndata: {\"delta\": \"Hello\"}\n\n")
-			fmt.Fprint(w, "event: chat.completed\ndata: {\"id\": \"chat_123\", \"output_text\": \"Hello\"}\n\n")
+			fmt.Fprint(w, "event: response.output_text.delta\ndata: {\"delta\": \"Hello\"}\n\n")
+			fmt.Fprint(w, "event: response.completed\ndata: {\"id\": \"resp_123\", \"output_text\": \"Hello\"}\n\n")
 			fmt.Fprint(w, "data: [DONE]\n\n")
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"id":      "chat_123",
-			"message": map[string]any{"role": "assistant", "content": "Hello"},
+			"id":          "resp_123",
+			"output_text": "Hello",
 		})
 	}))
 	defer server.Close()
 
 	client := boids.NewClient("test-key", boids.WithBaseURL(server.URL))
-	messages := []map[string]string{{"role": "user", "content": "Say hello"}}
 
-	response, err := client.CompleteChat(context.Background(), boids.ChatCompleteRequest{
-		Model:    "agent:test",
-		Messages: messages,
-		Extra:    map[string]any{"temperature": 0.2},
+	response, err := client.CreateResponse(context.Background(), boids.ResponseRequest{
+		Model: "agent:test",
+		Input: "Say hello",
+		Extra: map[string]any{"temperature": 0.2},
 	})
 	if err != nil {
 		return err
 	}
 	if encoded, err := json.Marshal(response); err == nil {
-		fmt.Printf("[sdk complete] %s\n", encoded)
+		fmt.Printf("[sdk create] %s\n", encoded)
 	}
 	responseMap, ok := response.(map[string]any)
-	if !ok || responseMap["id"] != "chat_123" {
+	if !ok || responseMap["id"] != "resp_123" {
 		return fmt.Errorf("unexpected response: %#v", response)
 	}
-	message, ok := responseMap["message"].(map[string]any)
-	if !ok || message["content"] != "Hello" {
-		return fmt.Errorf("unexpected message: %#v", responseMap["message"])
+	if responseMap["output_text"] != "Hello" {
+		return fmt.Errorf("unexpected output_text: %#v", responseMap["output_text"])
 	}
 
-	stream, err := client.StreamChatComplete(context.Background(), boids.ChatCompleteRequest{
-		Model:    "agent:test",
-		Messages: messages,
+	stream, err := client.StreamResponse(context.Background(), boids.ResponseRequest{
+		Model: "agent:test",
+		Input: "Say hello",
 	})
 	if err != nil {
 		return err
@@ -122,7 +120,7 @@ func run() error {
 	if encoded, err := json.Marshal(events); err == nil {
 		fmt.Printf("[sdk stream] %s\n", encoded)
 	}
-	if strings.Join(eventNames, ",") != "chat.delta,chat.completed" {
+	if strings.Join(eventNames, ",") != "response.output_text.delta,response.completed" {
 		return fmt.Errorf("unexpected events: %v", eventNames)
 	}
 	if text.String() != "Hello" {
@@ -132,7 +130,7 @@ func run() error {
 	if len(records) != 2 {
 		return fmt.Errorf("expected 2 requests, got %d", len(records))
 	}
-	if records[0].path != "/chat/complete" || records[1].path != "/chat/complete" {
+	if records[0].path != "/responses" || records[1].path != "/responses" {
 		return fmt.Errorf("unexpected paths: %s, %s", records[0].path, records[1].path)
 	}
 	if records[0].authorization != "Bearer test-key" {
@@ -140,6 +138,9 @@ func run() error {
 	}
 	if records[0].body["model"] != "agent:test" {
 		return fmt.Errorf("unexpected model: %#v", records[0].body["model"])
+	}
+	if records[0].body["input"] != "Say hello" {
+		return fmt.Errorf("unexpected input: %#v", records[0].body["input"])
 	}
 	if records[0].body["temperature"] != 0.2 {
 		return fmt.Errorf("unexpected temperature: %#v", records[0].body["temperature"])
@@ -159,14 +160,15 @@ func run() error {
 		})
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"id":      "chat_cli_123",
-			"message": map[string]any{"role": "assistant", "content": "Hello from CLI"},
+			"id":          "resp_cli_123",
+			"output_text": "Hello from CLI",
 		})
 	}))
 	defer cliServer.Close()
 
 	cliOut, err := runCLI(
-		"chat",
+		"responses",
+		"create",
 		"-api-key", "test-key",
 		"-base-url", cliServer.URL,
 		"-model", "agent:test",
@@ -181,14 +183,14 @@ func run() error {
 		return fmt.Errorf("cli output not json: %v (%s)", err, cliOut)
 	}
 	compact, _ := json.Marshal(cliResponse)
-	fmt.Printf("[cli chat] %s\n", compact)
-	if cliResponse["id"] != "chat_cli_123" {
+	fmt.Printf("[cli responses create] %s\n", compact)
+	if cliResponse["id"] != "resp_cli_123" {
 		return fmt.Errorf("unexpected cli response: %#v", cliResponse)
 	}
 	if len(cliRecords) != 1 {
 		return fmt.Errorf("expected 1 cli request, got %d", len(cliRecords))
 	}
-	if cliRecords[0].path != "/chat/complete" {
+	if cliRecords[0].path != "/responses" {
 		return fmt.Errorf("unexpected cli path: %s", cliRecords[0].path)
 	}
 	if cliRecords[0].authorization != "Bearer test-key" {
@@ -196,6 +198,9 @@ func run() error {
 	}
 	if cliRecords[0].body["model"] != "agent:test" {
 		return fmt.Errorf("unexpected cli model: %#v", cliRecords[0].body["model"])
+	}
+	if cliRecords[0].body["input"] != "Say hello" {
+		return fmt.Errorf("unexpected cli input: %#v", cliRecords[0].body["input"])
 	}
 	if cliRecords[0].body["stream"] != false {
 		return fmt.Errorf("unexpected cli stream flag: %#v", cliRecords[0].body["stream"])

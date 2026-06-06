@@ -29,7 +29,7 @@ class MockBoidsHandler(BaseHTTPRequestHandler):
             }
         )
 
-        if self.path != "/chat/complete":
+        if self.path != "/responses":
             self.send_error(404)
             return
         if self.headers.get("Authorization") != "Bearer test-key":
@@ -40,8 +40,8 @@ class MockBoidsHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.end_headers()
-            self.wfile.write(b'event: chat.delta\ndata: {"delta": "Hello"}\n\n')
-            self.wfile.write(b'event: chat.completed\ndata: {"id": "chat_123", "output_text": "Hello"}\n\n')
+            self.wfile.write(b'event: response.output_text.delta\ndata: {"delta": "Hello"}\n\n')
+            self.wfile.write(b'event: response.completed\ndata: {"id": "resp_123", "output_text": "Hello"}\n\n')
             self.wfile.write(b"data: [DONE]\n\n")
             return
 
@@ -51,8 +51,8 @@ class MockBoidsHandler(BaseHTTPRequestHandler):
         self.wfile.write(
             json.dumps(
                 {
-                    "id": "chat_123",
-                    "message": {"role": "assistant", "content": "Hello"},
+                    "id": "resp_123",
+                    "output_text": "Hello",
                 }
             ).encode("utf-8")
         )
@@ -68,32 +68,32 @@ def main() -> int:
     thread.start()
 
     try:
-        client = BoidsClient(
-            api_key="test-key",
-            base_url=f"http://127.0.0.1:{server.server_port}",
-        )
-        messages = [{"role": "user", "content": "Say hello"}]
+        base_url = f"http://127.0.0.1:{server.server_port}"
+        client = BoidsClient(api_key="test-key", base_url=base_url)
 
-        response = client.chat.complete(
+        response = client.responses.create(
             model="agent:test",
-            messages=messages,
+            input="Say hello",
             temperature=0.2,
         )
-        print("[sdk complete]", json.dumps(response, ensure_ascii=False))
-        assert response["id"] == "chat_123"
-        assert response["message"]["content"] == "Hello"
+        print("[sdk create]", json.dumps(response, ensure_ascii=False))
+        assert response["id"] == "resp_123"
+        assert response["output_text"] == "Hello"
 
         events = list(
-            client.chat.complete(
+            client.responses.create(
                 model="agent:test",
-                messages=messages,
+                input="Say hello",
                 stream=True,
             )
         )
         print("[sdk stream]", json.dumps([event.to_dict() for event in events], ensure_ascii=False))
-        assert [event.event for event in events] == ["chat.delta", "chat.completed"]
+        assert [event.event for event in events] == [
+            "response.output_text.delta",
+            "response.completed",
+        ]
         assert events[0].data["delta"] == "Hello"
-        assert events[1].data["id"] == "chat_123"
+        assert events[1].data["id"] == "resp_123"
 
         stdout = StringIO()
         with redirect_stdout(stdout):
@@ -102,8 +102,9 @@ def main() -> int:
                     "--api-key",
                     "test-key",
                     "--base-url",
-                    f"http://127.0.0.1:{server.server_port}",
-                    "chat",
+                    base_url,
+                    "responses",
+                    "create",
                     "--model",
                     "agent:test",
                     "--input",
@@ -112,26 +113,45 @@ def main() -> int:
                 ]
             )
         assert exit_code == 0
-        cli_response = json.loads(stdout.getvalue())
-        print("[cli chat]", json.dumps(cli_response, ensure_ascii=False))
-        assert cli_response["id"] == "chat_123"
+        create_response = json.loads(stdout.getvalue())
+        print("[cli responses create]", json.dumps(create_response, ensure_ascii=False))
+        assert create_response["id"] == "resp_123"
+
+        stdout = StringIO()
+        with redirect_stdout(stdout):
+            exit_code = cli_main(
+                [
+                    "--api-key",
+                    "test-key",
+                    "--base-url",
+                    base_url,
+                    "ask",
+                    "--model",
+                    "agent:test",
+                    "--no-stream",
+                    "--json",
+                    "Say hello",
+                ]
+            )
+        assert exit_code == 0
+        ask_response = json.loads(stdout.getvalue())
+        print("[cli ask]", json.dumps(ask_response, ensure_ascii=False))
+        assert ask_response["id"] == "resp_123"
 
         records = server.records  # type: ignore[attr-defined]
-        assert [record["path"] for record in records] == [
-            "/chat/complete",
-            "/chat/complete",
-            "/chat/complete",
-        ]
+        assert [record["path"] for record in records] == ["/responses"] * 4
         assert records[0]["authorization"] == "Bearer test-key"
         assert records[0]["body"]["model"] == "agent:test"
-        assert records[0]["body"]["messages"] == messages
+        assert records[0]["body"]["input"] == "Say hello"
         assert records[0]["body"]["stream"] is False
         assert records[0]["body"]["temperature"] == 0.2
         assert records[1]["body"]["stream"] is True
-        assert records[2]["body"]["messages"] == [{"role": "user", "content": "Say hello"}]
+        assert records[2]["body"]["input"] == "Say hello"
         assert records[2]["body"]["stream"] is False
+        assert records[3]["body"]["input"] == "Say hello"
+        assert records[3]["body"]["stream"] is False
 
-        print("python chat/complete test passed")
+        print("python responses test passed")
         return 0
     finally:
         server.shutdown()
