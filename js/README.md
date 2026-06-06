@@ -4,13 +4,27 @@ JavaScript SDK and CLI for the Boids API.
 
 ## Install
 
+Install the SDK from npm:
+
 ```bash
-curl -fsSL https://raw.githubusercontent.com/NevaMind-AI/boids-sdk/main/install.sh | bash
+npm install boids-sdk
+```
+
+Then set your API key:
+
+```bash
 export BOIDS_API_KEY="..."
 ```
 
-The installer tries `npm install -g boids-sdk` first, then falls back to pipx or
-pip. Use `npm install boids-sdk` for a project-local SDK dependency.
+Use environment variables in production rather than hard-coding API keys. With a
+local install, you can also run the bundled CLI through `npx boids ...`.
+
+To install the standalone `boids` CLI globally instead, use the bash installer
+(it tries `npm install -g boids-sdk` first, then falls back to pipx or pip):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/NevaMind-AI/boids-sdk/main/install.sh | bash
+```
 
 ## CLI
 
