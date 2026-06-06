@@ -34,12 +34,26 @@ export BOIDS_API_KEY="..."
 
 Use environment variables in production rather than hard-coding API keys.
 
+## API Example
+
+```bash
+# Get your API key in Settings. Use environment variables in production.
+curl "https://api.boids.so/v1/responses" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $BOIDS_API_KEY" \
+  -d '{
+  "model": "agent:@boids-team/jarvis",
+  "input": "Introduce yourself in one sentence.",
+  "stream": true
+}'
+```
+
 ## CLI
 
 Call a known agent directly:
 
 ```bash
-boids agent:@iris-wei-org/my-doppelganger "Introduce yourself in one sentence."
+boids agent:@boids-team/jarvis "Introduce yourself in one sentence."
 ```
 
 Search for agents in the market:
@@ -61,15 +75,15 @@ best match, then sends your prompt to `/v1/responses`.
 More explicit commands are also available:
 
 ```bash
-boids ask --model agent:@iris-wei-org/my-doppelganger "Introduce yourself."
-boids responses create --model agent:@iris-wei-org/my-doppelganger --input "Introduce yourself." --stream
+boids ask --model agent:@boids-team/jarvis "Introduce yourself."
+boids responses create --model agent:@boids-team/jarvis --input "Introduce yourself." --stream
 ```
 
 Continue a conversation by passing the previous response id:
 
 ```bash
-boids agent:@iris-wei-org/my-doppelganger "Remember my name is Ada." --show-response-id
-boids agent:@iris-wei-org/my-doppelganger "What is my name?" --prev resp_...
+boids agent:@boids-team/jarvis "Remember my name is Ada." --show-response-id
+boids agent:@boids-team/jarvis "What is my name?" --prev resp_...
 ```
 
 The CLI sends `previous_response_id` to `/v1/responses`. In stream mode,
@@ -79,7 +93,7 @@ clean for the assistant text.
 You can set a default model:
 
 ```bash
-export BOIDS_MODEL="agent:@iris-wei-org/my-doppelganger"
+export BOIDS_MODEL="agent:@boids-team/jarvis"
 boids ask "Introduce yourself in one sentence."
 ```
 
@@ -91,7 +105,7 @@ from boids import BoidsClient
 client = BoidsClient()
 
 response = client.responses.create(
-    model="agent:@iris-wei-org/my-doppelganger",
+    model="agent:@boids-team/jarvis",
     input="Introduce yourself in one sentence.",
 )
 print(response)
@@ -101,7 +115,7 @@ Streaming:
 
 ```python
 for event in client.responses.create(
-    model="agent:@iris-wei-org/my-doppelganger",
+    model="agent:@boids-team/jarvis",
     input="Introduce yourself in one sentence.",
     stream=True,
 ):
@@ -119,12 +133,12 @@ Conversation context:
 
 ```python
 first = client.responses.create(
-    model="agent:@iris-wei-org/my-doppelganger",
+    model="agent:@boids-team/jarvis",
     input="Remember my name is Ada.",
 )
 
 second = client.responses.create(
-    model="agent:@iris-wei-org/my-doppelganger",
+    model="agent:@boids-team/jarvis",
     input="What is my name?",
     previous_response_id=first["id"],
 )
@@ -138,7 +152,7 @@ import { Boids } from "boids-sdk";
 const client = new Boids();
 
 const response = await client.responses.create({
-  model: "agent:@iris-wei-org/my-doppelganger",
+  model: "agent:@boids-team/jarvis",
   input: "Introduce yourself in one sentence.",
 });
 console.log(response);
@@ -148,7 +162,7 @@ Streaming:
 
 ```js
 for await (const event of client.responses.create({
-  model: "agent:@iris-wei-org/my-doppelganger",
+  model: "agent:@boids-team/jarvis",
   input: "Introduce yourself in one sentence.",
   stream: true,
 })) {
@@ -170,12 +184,12 @@ Conversation context:
 
 ```js
 const first = await client.responses.create({
-  model: "agent:@iris-wei-org/my-doppelganger",
+  model: "agent:@boids-team/jarvis",
   input: "Remember my name is Ada.",
 });
 
 const second = await client.responses.create({
-  model: "agent:@iris-wei-org/my-doppelganger",
+  model: "agent:@boids-team/jarvis",
   input: "What is my name?",
   previous_response_id: first.id,
 });
@@ -198,7 +212,7 @@ func main() {
 	client := boids.NewClient("")
 
 	response, err := client.CreateResponse(context.Background(), boids.ResponseRequest{
-		Model: "agent:@iris-wei-org/my-doppelganger",
+		Model: "agent:@boids-team/jarvis",
 		Input: "Introduce yourself in one sentence.",
 	})
 	if err != nil {
@@ -213,7 +227,7 @@ Conversation context:
 
 ```go
 first, err := client.CreateResponse(context.Background(), boids.ResponseRequest{
-	Model: "agent:@iris-wei-org/my-doppelganger",
+	Model: "agent:@boids-team/jarvis",
 	Input: "Remember my name is Ada.",
 })
 if err != nil {
@@ -222,7 +236,7 @@ if err != nil {
 
 firstMap := first.(map[string]any)
 second, err := client.CreateResponse(context.Background(), boids.ResponseRequest{
-	Model:              "agent:@iris-wei-org/my-doppelganger",
+	Model:              "agent:@boids-team/jarvis",
 	Input:              "What is my name?",
 	PreviousResponseID: firstMap["id"].(string),
 })
@@ -232,7 +246,7 @@ Run the Go CLI locally:
 
 ```bash
 cd go
-go run ./cmd/boids agent:@iris-wei-org/my-doppelganger "Introduce yourself in one sentence."
+go run ./cmd/boids agent:@boids-team/jarvis "Introduce yourself in one sentence."
 go run ./cmd/boids search "global launch growth agent" -limit 5
 go run ./cmd/boids run "Create a launch plan for a developer tool."
 ```
