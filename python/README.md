@@ -5,9 +5,12 @@ Python SDK and CLI for the Boids API.
 ## Install
 
 ```bash
-pip install boids-sdk
+curl -fsSL https://raw.githubusercontent.com/NevaMind-AI/boids-sdk/main/install.sh | bash
 export BOIDS_API_KEY="..."
 ```
+
+The installer tries npm first, then falls back to pipx or pip. Use
+`pip install boids-sdk` when you only need the Python SDK dependency.
 
 ## CLI
 

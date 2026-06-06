@@ -8,6 +8,12 @@ bodies flexible for future Boids parameters.
 
 ## Install
 
+CLI:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/NevaMind-AI/boids-sdk/main/install.sh | bash
+```
+
 Python:
 
 ```bash
@@ -19,6 +25,9 @@ JavaScript:
 ```bash
 npm install boids-sdk
 ```
+
+With a local npm install, run the CLI through `npx boids ...` or from npm
+scripts. For a global CLI install, use the curl installer above.
 
 Go:
 
@@ -49,6 +58,20 @@ curl "https://api.boids.so/v1/responses" \
 ```
 
 ## CLI
+
+Install the CLI with the bash installer, then set `BOIDS_API_KEY`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/NevaMind-AI/boids-sdk/main/install.sh | bash
+export BOIDS_API_KEY="..."
+```
+
+The installer tries `npm install -g boids-sdk` first, then falls back to
+`pipx install boids-sdk` or `pip install --user boids-sdk`. To force a method:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/NevaMind-AI/boids-sdk/main/install.sh | BOIDS_INSTALL_METHOD=pipx bash
+```
 
 Call a known agent directly:
 
