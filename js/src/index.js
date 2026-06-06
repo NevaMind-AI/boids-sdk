@@ -29,6 +29,9 @@ export class Boids {
     this.responses = {
       create: (params) => this.createResponse(params),
     };
+    this.market = {
+      search: (params) => this.searchMarket(params),
+    };
   }
 
   createResponse(params = {}) {
@@ -51,6 +54,12 @@ export class Boids {
     } catch {
       return text;
     }
+  }
+
+  searchMarket(params = {}) {
+    const body = typeof params === "string" ? { query: params } : { ...params };
+    body.limit ??= 5;
+    return this.requestJSON("/market/search", body);
   }
 
   async *streamResponse(body) {

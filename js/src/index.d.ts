@@ -18,6 +18,12 @@ export interface ResponseEvent {
   raw: string;
 }
 
+export interface MarketSearchParams {
+  query: string;
+  limit?: number;
+  [key: string]: unknown;
+}
+
 export class BoidsError extends Error {}
 
 export class BoidsAPIError extends BoidsError {
@@ -30,7 +36,11 @@ export class Boids {
   responses: {
     create(params: ResponseCreateParams): Promise<unknown> | AsyncIterable<ResponseEvent>;
   };
+  market: {
+    search(params: MarketSearchParams | string): Promise<unknown>;
+  };
   createResponse(params: ResponseCreateParams): Promise<unknown> | AsyncIterable<ResponseEvent>;
+  searchMarket(params: MarketSearchParams | string): Promise<unknown>;
 }
 
 export function parseSSE(response: Response): AsyncIterable<ResponseEvent>;

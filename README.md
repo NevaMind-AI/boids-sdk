@@ -59,9 +59,15 @@ Use the CLI:
 
 ```bash
 boids agent:@iris-wei-org/my-doppelganger "Introduce yourself in one sentence."
+boids search "global launch growth agent" --limit 5
+boids run "Create a launch plan for a developer tool."
 boids ask --model agent:@iris-wei-org/my-doppelganger "Introduce yourself in one sentence."
 boids responses create --model agent:@iris-wei-org/my-doppelganger --input "Introduce yourself in one sentence." --stream
 ```
+
+`boids run` searches `/v1/market/search`, picks the first returned agent as the
+best match, then sends the prompt to `/v1/responses`. Use `--search-query` when
+you want one query for agent discovery and another prompt for execution.
 
 You can also set a default model:
 
@@ -106,6 +112,8 @@ Use the CLI:
 
 ```bash
 boids agent:@iris-wei-org/my-doppelganger "Introduce yourself in one sentence."
+boids search "global launch growth agent" --limit 5
+boids run "Create a launch plan for a developer tool."
 boids ask --model agent:@iris-wei-org/my-doppelganger "Introduce yourself in one sentence."
 boids responses create --model agent:@iris-wei-org/my-doppelganger --input "Introduce yourself in one sentence." --stream
 ```
@@ -145,6 +153,8 @@ Run the Go CLI locally:
 ```bash
 cd go
 go run ./cmd/boids agent:@iris-wei-org/my-doppelganger "Introduce yourself in one sentence."
+go run ./cmd/boids search "global launch growth agent" -limit 5
+go run ./cmd/boids run "Create a launch plan for a developer tool."
 go run ./cmd/boids ask -model agent:@iris-wei-org/my-doppelganger "Introduce yourself in one sentence."
 ```
 

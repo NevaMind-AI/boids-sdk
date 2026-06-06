@@ -33,6 +33,25 @@ def main(argv: Optional[list[str]] = None) -> int:
     ask.add_argument("--stream", dest="stream", action="store_true", default=True)
     ask.add_argument("--no-stream", dest="stream", action="store_false")
 
+    search = subcommands.add_parser("search", help="Search Boids market agents.")
+    search.add_argument("query", nargs="+")
+    search.add_argument("--limit", type=int, default=5)
+    search.add_argument("--json", action="store_true", help="Print raw JSON output.")
+
+    run = subcommands.add_parser(
+        "run",
+        aliases=["auto"],
+        help="Find the best matching agent and send a prompt to it.",
+    )
+    run.add_argument("input", nargs="+")
+    run.add_argument("--search-query", help="Use a different query for market search.")
+    run.add_argument("--limit", type=int, default=1)
+    run.add_argument("--json", action="store_true", help="Print raw JSON output.")
+    run.add_argument("--stream", dest="stream", action="store_true", default=True)
+    run.add_argument("--no-stream", dest="stream", action="store_false")
+    run.add_argument("--show-agent", dest="show_agent", action="store_true", default=True)
+    run.add_argument("--quiet-agent", dest="show_agent", action="store_false")
+
     responses = subcommands.add_parser("responses", help="Work with responses.")
     response_commands = responses.add_subparsers(dest="response_command", required=True)
 
@@ -53,6 +72,24 @@ def main(argv: Optional[list[str]] = None) -> int:
             model=model,
             input=input_text,
             stream=args.stream,
+        )
+        _print_result(result, as_json=args.json)
+        return 0
+
+    if args.command == "search":
+        result = client.market.search(query=" ".join(args.query), limit=args.limit)
+        _print_search_result(result, as_json=args.json)
+        return 0
+
+    if args.command in {"run", "auto"}:
+        input_text = " ".join(args.input)
+        result = _run_with_best_agent(
+            client,
+            input_text=input_text,
+            search_query=args.search_query or input_text,
+            limit=args.limit,
+            stream=args.stream,
+            show_agent=args.show_agent and not args.json,
         )
         _print_result(result, as_json=args.json)
         return 0
@@ -102,7 +139,7 @@ def _run_shortcut(argv: list[str]) -> int:
 
 def _looks_like_shortcut(argv: list[str]) -> bool:
     first = _first_positional(argv)
-    return first is not None and first not in {"ask", "responses"}
+    return first is not None and first not in {"ask", "responses", "search", "run", "auto"}
 
 
 def _first_positional(argv: list[str]) -> Optional[str]:
@@ -133,6 +170,83 @@ def _require_model(model: Optional[str]) -> str:
     if model:
         return model
     raise SystemExit("Missing --model or BOIDS_MODEL.")
+
+
+def _run_with_best_agent(
+    client: BoidsClient,
+    *,
+    input_text: str,
+    search_query: str,
+    limit: int,
+    stream: bool,
+    show_agent: bool,
+) -> Any:
+    search_result = client.market.search(query=search_query, limit=limit)
+    item = _first_market_item(search_result)
+    if item is None:
+        raise SystemExit(f"No agents found for: {search_query}")
+
+    model = _agent_model(item)
+    if model is None:
+        raise SystemExit("Best market result did not include a usable model.")
+
+    if show_agent:
+        title = item.get("title") or item.get("id") or model
+        print(f"Selected agent: {title} ({model})", file=sys.stderr)
+
+    return client.responses.create(model=model, input=input_text, stream=stream)
+
+
+def _print_search_result(result: Any, *, as_json: bool) -> None:
+    if as_json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return
+
+    items = _market_items(result)
+    if not items:
+        print("No agents found.")
+        return
+
+    for index, item in enumerate(items, start=1):
+        title = item.get("title") or item.get("id") or "Untitled agent"
+        model = _agent_model(item) or "unknown"
+        description = item.get("description") or ""
+        print(f"{index}. {title}")
+        print(f"   model: {model}")
+        if description:
+            print(f"   {description}")
+
+
+def _first_market_item(result: Any) -> Optional[dict[str, Any]]:
+    items = _market_items(result)
+    return items[0] if items else None
+
+
+def _market_items(result: Any) -> list[dict[str, Any]]:
+    if not isinstance(result, dict):
+        return []
+    data = result.get("data")
+    if not isinstance(data, dict):
+        return []
+    items = data.get("items")
+    if not isinstance(items, list):
+        return []
+    return [item for item in items if isinstance(item, dict)]
+
+
+def _agent_model(item: dict[str, Any]) -> Optional[str]:
+    model_name = item.get("model_name")
+    if isinstance(model_name, str) and model_name.startswith("agent:"):
+        return model_name
+
+    agent_id = item.get("agent_id") or item.get("id")
+    if isinstance(agent_id, str) and agent_id:
+        return f"agent:{agent_id}"
+
+    if isinstance(model_name, str) and model_name:
+        return model_name
+
+    return None
 
 
 def _print_result(result: Any, *, as_json: bool) -> None:

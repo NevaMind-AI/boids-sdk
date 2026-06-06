@@ -71,6 +71,12 @@ type ResponseRequest struct {
 	Extra  map[string]any
 }
 
+type MarketSearchRequest struct {
+	Query string
+	Limit int
+	Extra map[string]any
+}
+
 type ResponseEvent struct {
 	Event string `json:"event,omitempty"`
 	Data  any    `json:"data"`
@@ -117,6 +123,35 @@ func (client *Client) StreamResponse(ctx context.Context, request ResponseReques
 	}, nil
 }
 
+func (client *Client) SearchMarket(ctx context.Context, request MarketSearchRequest) (any, error) {
+	limit := request.Limit
+	if limit == 0 {
+		limit = 5
+	}
+
+	body := make(map[string]any, len(request.Extra)+2)
+	for key, value := range request.Extra {
+		if value != nil {
+			body[key] = value
+		}
+	}
+	body["query"] = request.Query
+	body["limit"] = limit
+
+	response, err := client.post(ctx, "/market/search", body)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+
+	var output any
+	if err := json.NewDecoder(response.Body).Decode(&output); err != nil {
+		return nil, err
+	}
+
+	return output, nil
+}
+
 func (client *Client) postResponse(ctx context.Context, responseRequest ResponseRequest) (*http.Response, error) {
 	if client.APIKey == "" {
 		return nil, fmt.Errorf("missing BOIDS_API_KEY or API key")
@@ -132,6 +167,14 @@ func (client *Client) postResponse(ctx context.Context, responseRequest Response
 	body["input"] = responseRequest.Input
 	body["stream"] = responseRequest.Stream
 
+	return client.post(ctx, "/responses", body)
+}
+
+func (client *Client) post(ctx context.Context, path string, body map[string]any) (*http.Response, error) {
+	if client.APIKey == "" {
+		return nil, fmt.Errorf("missing BOIDS_API_KEY or API key")
+	}
+
 	payload, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
@@ -140,7 +183,7 @@ func (client *Client) postResponse(ctx context.Context, responseRequest Response
 	httpRequest, err := http.NewRequestWithContext(
 		ctx,
 		http.MethodPost,
-		client.BaseURL+"/responses",
+		client.BaseURL+path,
 		bytes.NewReader(payload),
 	)
 	if err != nil {

@@ -57,6 +57,17 @@ class ResponsesResource:
         return self._client._post("/responses", body, stream=stream)
 
 
+class MarketResource:
+    def __init__(self, client: "BoidsClient"):
+        self._client = client
+
+    def search(self, *, query: str, limit: int = 5, **params: Any) -> Any:
+        body = dict(params)
+        body["query"] = query
+        body["limit"] = limit
+        return self._client._post("/market/search", body, stream=False)
+
+
 class BoidsClient:
     def __init__(
         self,
@@ -71,6 +82,7 @@ class BoidsClient:
         self.timeout = timeout
         self.headers = dict(headers or {})
         self.responses = ResponsesResource(self)
+        self.market = MarketResource(self)
 
     def _post(self, path: str, body: Mapping[str, Any], *, stream: bool) -> Any:
         response = self._open(path, body)
