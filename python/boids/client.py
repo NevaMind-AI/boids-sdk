@@ -59,6 +59,25 @@ class ResponsesResource:
         return self._client._post("/responses", body, stream=stream)
 
 
+class ChatResource:
+    def __init__(self, client: "BoidsClient"):
+        self._client = client
+
+    def complete(
+        self,
+        *,
+        model: Optional[str] = None,
+        messages: Any = None,
+        stream: bool = False,
+        **params: Any,
+    ) -> Any:
+        body = dict(params)
+        body["model"] = model
+        body["messages"] = messages
+        body["stream"] = stream
+        return self._client._post("/chat/complete", body, stream=stream)
+
+
 class MarketResource:
     def __init__(self, client: "BoidsClient"):
         self._client = client
@@ -84,6 +103,7 @@ class BoidsClient:
         self.timeout = timeout
         self.headers = dict(headers or {})
         self.responses = ResponsesResource(self)
+        self.chat = ChatResource(self)
         self.market = MarketResource(self)
 
     def _post(self, path: str, body: Mapping[str, Any], *, stream: bool) -> Any:

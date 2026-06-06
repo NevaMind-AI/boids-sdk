@@ -96,6 +96,23 @@ async function main(argv) {
     return 0;
   }
 
+  if (command === "chat") {
+    const options = parseOptions(argv);
+    const model = requireModel(options.model);
+    const input = options.input ?? options._.join(" ");
+
+    const client = makeClient(options);
+    const result = client.chat.complete({
+      model,
+      messages: chatMessages(input, options.messages),
+      stream: Boolean(options.stream),
+    });
+    await printResult(result, Boolean(options.json), {
+      showResponseId: Boolean(options.showResponseId),
+    });
+    return 0;
+  }
+
   throw new Error(`Unknown command: ${command}`);
 }
 
@@ -285,6 +302,9 @@ function parseOptions(args, { envModel = true } = {}) {
       options.searchQuery = args[++index];
     } else if (arg === "--limit") {
       options.limit = args[++index];
+    } else if (arg === "--message") {
+      options.messages ??= [];
+      options.messages.push(args[++index]);
     } else if (arg === "--previous-response-id" || arg === "--prev") {
       options.previousResponseId = args[++index];
     } else if (arg === "--api-key") {
@@ -301,6 +321,9 @@ function parseOptions(args, { envModel = true } = {}) {
       options.searchQuery = arg.slice("--search-query=".length);
     } else if (arg.startsWith("--limit=")) {
       options.limit = arg.slice("--limit=".length);
+    } else if (arg.startsWith("--message=")) {
+      options.messages ??= [];
+      options.messages.push(arg.slice("--message=".length));
     } else if (arg.startsWith("--previous-response-id=")) {
       options.previousResponseId = arg.slice("--previous-response-id=".length);
     } else if (arg.startsWith("--prev=")) {
@@ -325,6 +348,27 @@ function requireModel(model) {
     return model;
   }
   throw new Error("Missing --model or BOIDS_MODEL.");
+}
+
+function chatMessages(input, rawMessages = []) {
+  const messages = [];
+  for (const rawMessage of rawMessages) {
+    const separator = rawMessage.indexOf(":");
+    const role = separator === -1 ? "" : rawMessage.slice(0, separator);
+    const content = separator === -1 ? "" : rawMessage.slice(separator + 1);
+    if (!role || !content) {
+      throw new Error("--message must be formatted as role:content.");
+    }
+    messages.push({ role, content });
+  }
+
+  if (input) {
+    messages.push({ role: "user", content: input });
+  }
+  if (messages.length === 0) {
+    throw new Error("Missing --input, --message, or input text.");
+  }
+  return messages;
 }
 
 function isAsyncIterable(value) {
@@ -354,7 +398,7 @@ function printResponseId(value) {
 
 function looksLikeShortcut(args) {
   const first = firstPositional(args);
-  return first !== undefined && !["ask", "responses", "search", "run", "auto"].includes(first);
+  return first !== undefined && !["ask", "responses", "chat", "search", "run", "auto"].includes(first);
 }
 
 function firstPositional(args) {
@@ -370,6 +414,7 @@ function firstPositional(args) {
     "-q",
     "--search-query",
     "--limit",
+    "--message",
     "--previous-response-id",
     "--prev",
   ]);
@@ -393,6 +438,7 @@ function firstPositional(args) {
       arg.startsWith("--query=") ||
       arg.startsWith("--search-query=") ||
       arg.startsWith("--limit=") ||
+      arg.startsWith("--message=") ||
       arg.startsWith("--previous-response-id=") ||
       arg.startsWith("--prev=")
     ) {
@@ -416,6 +462,7 @@ function usage() {
   boids run <input> [--search-query <query>] [--prev <response-id>]
   boids ask --model <model> [--no-stream] <input>
   boids responses create --model <model> --input <input> [--stream] [--prev <response-id>]
+  boids chat --model <model> --input <input> [--stream]
 
 Environment:
   BOIDS_API_KEY   Required API key

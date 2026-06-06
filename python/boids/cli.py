@@ -67,6 +67,15 @@ def main(argv: Optional[list[str]] = None) -> int:
     create.add_argument("--previous-response-id", "--prev", dest="previous_response_id")
     create.add_argument("--show-response-id", action="store_true")
 
+    chat = subcommands.add_parser("chat", help="Create a chat completion.")
+    chat.add_argument("-m", "--model", default=os.getenv("BOIDS_MODEL"))
+    chat.add_argument("-i", "--input")
+    chat.add_argument("--message", action="append", default=[], help="Add a role:content message.")
+    chat.add_argument("--json", action="store_true", help="Print raw JSON output.")
+    chat.add_argument("--stream", action="store_true")
+    chat.add_argument("--show-response-id", action="store_true")
+    chat.add_argument("input_args", nargs="*")
+
     args = parser.parse_args(argv)
 
     client = BoidsClient(api_key=args.api_key, base_url=args.base_url)
@@ -118,6 +127,16 @@ def main(argv: Optional[list[str]] = None) -> int:
         _print_result(result, as_json=args.json, show_response_id=args.show_response_id)
         return 0
 
+    if args.command == "chat":
+        model = _require_model(args.model)
+        result = client.chat.complete(
+            model=model,
+            messages=_chat_messages(args.input, args.input_args, args.message),
+            stream=args.stream,
+        )
+        _print_result(result, as_json=args.json, show_response_id=args.show_response_id)
+        return 0
+
     parser.error("Unknown command.")
     return 2
 
@@ -151,7 +170,7 @@ def _run_shortcut(argv: list[str]) -> int:
 
 def _looks_like_shortcut(argv: list[str]) -> bool:
     first = _first_positional(argv)
-    return first is not None and first not in {"ask", "responses", "search", "run", "auto"}
+    return first is not None and first not in {"ask", "responses", "chat", "search", "run", "auto"}
 
 
 def _first_positional(argv: list[str]) -> Optional[str]:
@@ -218,6 +237,29 @@ def _run_with_best_agent(
         stream=stream,
         previous_response_id=previous_response_id,
     )
+
+
+def _chat_messages(
+    input_text: Optional[str],
+    input_args: list[str],
+    raw_messages: list[str],
+) -> list[dict[str, str]]:
+    messages: list[dict[str, str]] = []
+    for raw_message in raw_messages:
+        role, separator, content = raw_message.partition(":")
+        if not separator or not role or not content:
+            raise SystemExit("--message must be formatted as role:content.")
+        messages.append({"role": role, "content": content})
+
+    if input_text is None and input_args:
+        input_text = " ".join(input_args)
+    if input_text is None and not sys.stdin.isatty():
+        input_text = sys.stdin.read()
+    if input_text:
+        messages.append({"role": "user", "content": input_text})
+    if not messages:
+        raise SystemExit("Missing --input, --message, piped stdin, or input text.")
+    return messages
 
 
 def _print_search_result(result: Any, *, as_json: bool) -> None:

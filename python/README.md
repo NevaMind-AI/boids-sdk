@@ -39,6 +39,16 @@ response = client.responses.create(
 print(response)
 ```
 
+Chat complete:
+
+```python
+response = client.chat.complete(
+    model="agent:@boids-team/jarvis",
+    messages=[{"role": "user", "content": "Introduce yourself in one sentence."}],
+)
+print(response)
+```
+
 Streaming:
 
 ```python

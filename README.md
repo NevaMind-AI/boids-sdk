@@ -100,6 +100,7 @@ More explicit commands are also available:
 ```bash
 boids ask --model agent:@boids-team/jarvis "Introduce yourself."
 boids responses create --model agent:@boids-team/jarvis --input "Introduce yourself." --stream
+boids chat --model agent:@boids-team/jarvis --input "Introduce yourself."
 ```
 
 Continue a conversation by passing the previous response id:
@@ -130,6 +131,16 @@ client = BoidsClient()
 response = client.responses.create(
     model="agent:@boids-team/jarvis",
     input="Introduce yourself in one sentence.",
+)
+print(response)
+```
+
+Chat complete:
+
+```python
+response = client.chat.complete(
+    model="agent:@boids-team/jarvis",
+    messages=[{"role": "user", "content": "Introduce yourself in one sentence."}],
 )
 print(response)
 ```
@@ -177,6 +188,16 @@ const client = new Boids();
 const response = await client.responses.create({
   model: "agent:@boids-team/jarvis",
   input: "Introduce yourself in one sentence.",
+});
+console.log(response);
+```
+
+Chat complete:
+
+```js
+const response = await client.chat.complete({
+  model: "agent:@boids-team/jarvis",
+  messages: [{ role: "user", content: "Introduce yourself in one sentence." }],
 });
 console.log(response);
 ```
@@ -244,6 +265,17 @@ func main() {
 
 	fmt.Printf("%#v\n", response)
 }
+```
+
+Chat complete:
+
+```go
+response, err := client.CompleteChat(context.Background(), boids.ChatCompleteRequest{
+	Model: "agent:@boids-team/jarvis",
+	Messages: []map[string]string{
+		{"role": "user", "content": "Introduce yourself in one sentence."},
+	},
+})
 ```
 
 Conversation context:

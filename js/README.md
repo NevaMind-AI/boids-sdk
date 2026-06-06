@@ -39,6 +39,16 @@ const response = await client.responses.create({
 console.log(response);
 ```
 
+Chat complete:
+
+```js
+const response = await client.chat.complete({
+  model: "agent:@boids-team/jarvis",
+  messages: [{ role: "user", content: "Introduce yourself in one sentence." }],
+});
+console.log(response);
+```
+
 Streaming:
 
 ```js

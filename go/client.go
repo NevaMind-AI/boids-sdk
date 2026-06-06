@@ -72,6 +72,13 @@ type ResponseRequest struct {
 	Extra              map[string]any
 }
 
+type ChatCompleteRequest struct {
+	Model    string
+	Messages any
+	Stream   bool
+	Extra    map[string]any
+}
+
 type MarketSearchRequest struct {
 	Query string
 	Limit int
@@ -108,9 +115,40 @@ func (client *Client) CreateResponse(ctx context.Context, request ResponseReques
 	return output, nil
 }
 
+func (client *Client) CompleteChat(ctx context.Context, request ChatCompleteRequest) (any, error) {
+	response, err := client.postChatComplete(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+
+	var output any
+	if err := json.NewDecoder(response.Body).Decode(&output); err != nil {
+		return nil, err
+	}
+
+	return output, nil
+}
+
 func (client *Client) StreamResponse(ctx context.Context, request ResponseRequest) (*ResponseStream, error) {
 	request.Stream = true
 	response, err := client.postResponse(ctx, request)
+	if err != nil {
+		return nil, err
+	}
+
+	scanner := bufio.NewScanner(response.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+
+	return &ResponseStream{
+		scanner: scanner,
+		closer:  response.Body,
+	}, nil
+}
+
+func (client *Client) StreamChatComplete(ctx context.Context, request ChatCompleteRequest) (*ResponseStream, error) {
+	request.Stream = true
+	response, err := client.postChatComplete(ctx, request)
 	if err != nil {
 		return nil, err
 	}
@@ -172,6 +210,28 @@ func (client *Client) postResponse(ctx context.Context, responseRequest Response
 	}
 
 	return client.post(ctx, "/responses", body)
+}
+
+func (client *Client) postChatComplete(ctx context.Context, chatRequest ChatCompleteRequest) (*http.Response, error) {
+	if client.APIKey == "" {
+		return nil, fmt.Errorf("missing BOIDS_API_KEY or API key")
+	}
+
+	body := make(map[string]any, len(chatRequest.Extra)+3)
+	for key, value := range chatRequest.Extra {
+		if value != nil {
+			body[key] = value
+		}
+	}
+	if chatRequest.Model != "" {
+		body["model"] = chatRequest.Model
+	}
+	if chatRequest.Messages != nil {
+		body["messages"] = chatRequest.Messages
+	}
+	body["stream"] = chatRequest.Stream
+
+	return client.post(ctx, "/chat/complete", body)
 }
 
 func (client *Client) post(ctx context.Context, path string, body map[string]any) (*http.Response, error) {

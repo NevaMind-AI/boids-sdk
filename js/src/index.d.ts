@@ -19,6 +19,19 @@ export interface ResponseEvent {
   raw: string;
 }
 
+export interface ChatMessage {
+  role: string;
+  content: unknown;
+  [key: string]: unknown;
+}
+
+export interface ChatCompleteParams {
+  model: string;
+  messages: ChatMessage[];
+  stream?: boolean;
+  [key: string]: unknown;
+}
+
 export interface MarketSearchParams {
   query: string;
   limit?: number;
@@ -37,10 +50,14 @@ export class Boids {
   responses: {
     create(params: ResponseCreateParams): Promise<unknown> | AsyncIterable<ResponseEvent>;
   };
+  chat: {
+    complete(params: ChatCompleteParams): Promise<unknown> | AsyncIterable<ResponseEvent>;
+  };
   market: {
     search(params: MarketSearchParams | string): Promise<unknown>;
   };
   createResponse(params: ResponseCreateParams): Promise<unknown> | AsyncIterable<ResponseEvent>;
+  completeChat(params: ChatCompleteParams): Promise<unknown> | AsyncIterable<ResponseEvent>;
   searchMarket(params: MarketSearchParams | string): Promise<unknown>;
 }
 

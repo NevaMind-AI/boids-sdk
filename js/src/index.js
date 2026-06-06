@@ -29,6 +29,9 @@ export class Boids {
     this.responses = {
       create: (params) => this.createResponse(params),
     };
+    this.chat = {
+      complete: (params) => this.completeChat(params),
+    };
     this.market = {
       search: (params) => this.searchMarket(params),
     };
@@ -40,6 +43,14 @@ export class Boids {
       return this.streamResponse(body);
     }
     return this.requestJSON("/responses", body);
+  }
+
+  completeChat(params = {}) {
+    const body = withoutUndefined({ ...params });
+    if (body.stream) {
+      return this.streamChatCompletion(body);
+    }
+    return this.requestJSON("/chat/complete", body);
   }
 
   async requestJSON(path, body) {
@@ -64,6 +75,11 @@ export class Boids {
 
   async *streamResponse(body) {
     const response = await this.request("/responses", { ...body, stream: true });
+    yield* parseSSE(response);
+  }
+
+  async *streamChatCompletion(body) {
+    const response = await this.request("/chat/complete", { ...body, stream: true });
     yield* parseSSE(response);
   }
 

@@ -35,6 +35,8 @@ func run(args []string) error {
 		if len(args) > 1 && args[1] == "create" {
 			return createResponse(args[2:])
 		}
+	case "chat":
+		return completeChat(args[1:])
 	}
 
 	return shortcut(args)
@@ -219,47 +221,49 @@ func createResponse(args []string) error {
 	return printResponse(context.Background(), client, request, *jsonOutput, *showResponseID)
 }
 
+func completeChat(args []string) error {
+	flags := flag.NewFlagSet("chat", flag.ContinueOnError)
+	model := flags.String("model", os.Getenv("BOIDS_MODEL"), "Boids model")
+	input := flags.String("input", "", "Input text")
+	apiKey := flags.String("api-key", os.Getenv("BOIDS_API_KEY"), "Boids API key")
+	baseURL := flags.String("base-url", boids.DefaultBaseURL, "Boids API base URL")
+	stream := flags.Bool("stream", false, "Stream response events")
+	showResponseID := flags.Bool("show-response-id", false, "Print the response id to stderr")
+	jsonOutput := flags.Bool("json", false, "Print raw JSON")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
+
+	if *model == "" {
+		return fmt.Errorf("missing -model or BOIDS_MODEL")
+	}
+
+	inputText := *input
+	if inputText == "" {
+		inputText = strings.Join(flags.Args(), " ")
+	}
+	if inputText == "" {
+		return fmt.Errorf("missing -input or input text")
+	}
+
+	client := boids.NewClient(*apiKey, boids.WithBaseURL(*baseURL))
+	request := boids.ChatCompleteRequest{
+		Model: *model,
+		Messages: []map[string]string{
+			{"role": "user", "content": inputText},
+		},
+		Stream: *stream,
+	}
+	return printChatCompletion(context.Background(), client, request, *jsonOutput, *showResponseID)
+}
+
 func printResponse(ctx context.Context, client *boids.Client, request boids.ResponseRequest, jsonOutput bool, showResponseID bool) error {
 	if request.Stream {
 		stream, err := client.StreamResponse(ctx, request)
 		if err != nil {
 			return err
 		}
-		defer stream.Close()
-
-		wroteText := false
-		fallbackText := ""
-		responseID := ""
-		for stream.Next() {
-			event := stream.Event()
-			if strings.HasSuffix(event.Event, ".completed") {
-				fallbackText = extractText(event.Data)
-				responseID = extractResponseID(event.Data)
-			}
-
-			if jsonOutput {
-				if err := printJSON(event); err != nil {
-					return err
-				}
-				continue
-			}
-
-			delta := extractDelta(event.Data)
-			if delta != "" {
-				fmt.Print(delta)
-				wroteText = true
-				continue
-			}
-		}
-		if wroteText {
-			fmt.Println()
-		} else if fallbackText != "" {
-			fmt.Println(fallbackText)
-		}
-		if showResponseID && responseID != "" {
-			fmt.Fprintf(os.Stderr, "Response ID: %s\n", responseID)
-		}
-		return stream.Err()
+		return printResponseStream(stream, jsonOutput, showResponseID)
 	}
 
 	response, err := client.CreateResponse(ctx, request)
@@ -267,6 +271,65 @@ func printResponse(ctx context.Context, client *boids.Client, request boids.Resp
 		return err
 	}
 
+	return printResponseValue(response, jsonOutput, showResponseID)
+}
+
+func printChatCompletion(ctx context.Context, client *boids.Client, request boids.ChatCompleteRequest, jsonOutput bool, showResponseID bool) error {
+	if request.Stream {
+		stream, err := client.StreamChatComplete(ctx, request)
+		if err != nil {
+			return err
+		}
+		return printResponseStream(stream, jsonOutput, showResponseID)
+	}
+
+	response, err := client.CompleteChat(ctx, request)
+	if err != nil {
+		return err
+	}
+
+	return printResponseValue(response, jsonOutput, showResponseID)
+}
+
+func printResponseStream(stream *boids.ResponseStream, jsonOutput bool, showResponseID bool) error {
+	defer stream.Close()
+
+	wroteText := false
+	fallbackText := ""
+	responseID := ""
+	for stream.Next() {
+		event := stream.Event()
+		if strings.HasSuffix(event.Event, ".completed") {
+			fallbackText = extractText(event.Data)
+			responseID = extractResponseID(event.Data)
+		}
+
+		if jsonOutput {
+			if err := printJSON(event); err != nil {
+				return err
+			}
+			continue
+		}
+
+		delta := extractDelta(event.Data)
+		if delta != "" {
+			fmt.Print(delta)
+			wroteText = true
+			continue
+		}
+	}
+	if wroteText {
+		fmt.Println()
+	} else if fallbackText != "" {
+		fmt.Println(fallbackText)
+	}
+	if showResponseID && responseID != "" {
+		fmt.Fprintf(os.Stderr, "Response ID: %s\n", responseID)
+	}
+	return stream.Err()
+}
+
+func printResponseValue(response any, jsonOutput bool, showResponseID bool) error {
 	if jsonOutput {
 		if err := printJSON(response); err != nil {
 			return err
@@ -441,6 +504,7 @@ func usage() {
   boids run <input> [-search-query <query>] [-prev <response-id>]
   boids ask -model <model> <input>
   boids responses create -model <model> -input <input> [-stream] [-prev <response-id>]
+  boids chat -model <model> -input <input> [-stream]
 
 Environment:
   BOIDS_API_KEY   Required API key
