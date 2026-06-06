@@ -8,7 +8,12 @@ dist/
 build/
 *.egg-info/
 node_modules/
+.npm-cache/
+.npmrc.publish
 npm-debug.log*
+*.tgz
+.publish-venv/
+.publish-tools/
 coverage/
 .env
 /bin/

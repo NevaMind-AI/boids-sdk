@@ -10,12 +10,17 @@ readme = "README.md"
 requires-python = ">=3.9"
 authors = [{ name = "Boids SDK contributors" }]
 license = { text = "MIT" }
-keywords = ["boids", "sdk", "cli", "responses"]
+keywords = ["boids", "sdk", "cli", "responses", "agents"]
 classifiers = [
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",
   "License :: OSI Approved :: MIT License",
 ]
+
+[project.urls]
+Homepage = "https://github.com/NevaMind-AI/boids-sdk"
+Repository = "https://github.com/NevaMind-AI/boids-sdk"
+Issues = "https://github.com/NevaMind-AI/boids-sdk/issues"
 
 [project.scripts]
 boids = "boids.cli:main"

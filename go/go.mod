@@ -1,3 +1,3 @@
-module github.com/boids/boids-go
+module github.com/NevaMind-AI/boids-sdk/go
 
 go 1.21

@@ -1,40 +1,78 @@
 # Boids SDK
 
-Lightweight SDKs and CLI wrappers for the Boids Responses API.
+Python, JavaScript, and Go SDKs plus a `boids` CLI for the Boids API.
 
-The SDKs are intentionally small: they handle the base URL, bearer auth,
-JSON encoding, API errors, and server-sent event streaming while keeping the
-request body flexible for future Boids parameters.
+The SDKs are intentionally small. They handle the base URL, bearer auth, JSON
+encoding, API errors, and server-sent event streaming while keeping request
+bodies flexible for future Boids parameters.
+
+## Install
+
+Python:
+
+```bash
+pip install boids-sdk
+```
+
+JavaScript:
+
+```bash
+npm install boids-sdk
+```
+
+Go:
+
+```bash
+go get github.com/NevaMind-AI/boids-sdk/go
+```
+
+Set your API key:
 
 ```bash
 export BOIDS_API_KEY="..."
-
-curl "https://api.boids.so/v1/responses" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $BOIDS_API_KEY" \
-  -d '{
-    "model": "agent:@iris-wei-org/my-doppelganger",
-    "input": "Introduce yourself in one sentence.",
-    "stream": true
-  }'
 ```
 
-## Layout
+Use environment variables in production rather than hard-coding API keys.
 
-- `python/`: Python SDK plus a `boids` CLI.
-- `js/`: JavaScript SDK plus a `boids` CLI for Node.js.
-- `go/`: Go SDK plus an optional `cmd/boids` CLI.
+## CLI
 
-## Python
-
-Install locally:
+Call a known agent directly:
 
 ```bash
-cd python
-python -m pip install -e .
+boids agent:@iris-wei-org/my-doppelganger "Introduce yourself in one sentence."
 ```
 
-Use the SDK:
+Search for agents in the market:
+
+```bash
+boids search "global launch growth agent" --limit 5
+```
+
+Find the best matching agent and run your prompt end to end:
+
+```bash
+boids run "Create a launch plan for a developer tool."
+boids run "Write an SEO plan" --search-query "SEO growth agent"
+```
+
+`boids run` calls `/v1/market/search`, picks the first returned agent as the
+best match, then sends your prompt to `/v1/responses`.
+
+More explicit commands are also available:
+
+```bash
+boids ask --model agent:@iris-wei-org/my-doppelganger "Introduce yourself."
+boids responses create --model agent:@iris-wei-org/my-doppelganger --input "Introduce yourself." --stream
+```
+
+You can set a default model:
+
+```bash
+export BOIDS_MODEL="agent:@iris-wei-org/my-doppelganger"
+boids ask "Introduce yourself in one sentence."
+```
+
+## Python
 
 ```python
 from boids import BoidsClient
@@ -46,7 +84,11 @@ response = client.responses.create(
     input="Introduce yourself in one sentence.",
 )
 print(response)
+```
 
+Streaming:
+
+```python
 for event in client.responses.create(
     model="agent:@iris-wei-org/my-doppelganger",
     input="Introduce yourself in one sentence.",
@@ -55,41 +97,17 @@ for event in client.responses.create(
     print(event.data)
 ```
 
-Use the CLI:
+Market search:
 
-```bash
-boids agent:@iris-wei-org/my-doppelganger "Introduce yourself in one sentence."
-boids search "global launch growth agent" --limit 5
-boids run "Create a launch plan for a developer tool."
-boids ask --model agent:@iris-wei-org/my-doppelganger "Introduce yourself in one sentence."
-boids responses create --model agent:@iris-wei-org/my-doppelganger --input "Introduce yourself in one sentence." --stream
-```
-
-`boids run` searches `/v1/market/search`, picks the first returned agent as the
-best match, then sends the prompt to `/v1/responses`. Use `--search-query` when
-you want one query for agent discovery and another prompt for execution.
-
-You can also set a default model:
-
-```bash
-export BOIDS_MODEL="agent:@iris-wei-org/my-doppelganger"
-boids ask "Introduce yourself in one sentence."
+```python
+agents = client.market.search(query="global launch growth agent", limit=5)
+print(agents["data"]["items"][0]["model_name"])
 ```
 
 ## JavaScript
 
-Install locally:
-
-```bash
-cd js
-npm install
-npm link
-```
-
-Use the SDK:
-
 ```js
-import { Boids } from "@boids/sdk";
+import { Boids } from "boids-sdk";
 
 const client = new Boids();
 
@@ -98,7 +116,11 @@ const response = await client.responses.create({
   input: "Introduce yourself in one sentence.",
 });
 console.log(response);
+```
 
+Streaming:
+
+```js
 for await (const event of client.responses.create({
   model: "agent:@iris-wei-org/my-doppelganger",
   input: "Introduce yourself in one sentence.",
@@ -108,19 +130,17 @@ for await (const event of client.responses.create({
 }
 ```
 
-Use the CLI:
+Market search:
 
-```bash
-boids agent:@iris-wei-org/my-doppelganger "Introduce yourself in one sentence."
-boids search "global launch growth agent" --limit 5
-boids run "Create a launch plan for a developer tool."
-boids ask --model agent:@iris-wei-org/my-doppelganger "Introduce yourself in one sentence."
-boids responses create --model agent:@iris-wei-org/my-doppelganger --input "Introduce yourself in one sentence." --stream
+```js
+const agents = await client.market.search({
+  query: "global launch growth agent",
+  limit: 5,
+});
+console.log(agents.data.items[0].model_name);
 ```
 
 ## Go
-
-Use the SDK:
 
 ```go
 package main
@@ -130,7 +150,7 @@ import (
 	"fmt"
 	"log"
 
-	boids "github.com/boids/boids-go"
+	boids "github.com/NevaMind-AI/boids-sdk/go"
 )
 
 func main() {
@@ -155,15 +175,16 @@ cd go
 go run ./cmd/boids agent:@iris-wei-org/my-doppelganger "Introduce yourself in one sentence."
 go run ./cmd/boids search "global launch growth agent" -limit 5
 go run ./cmd/boids run "Create a launch plan for a developer tool."
-go run ./cmd/boids ask -model agent:@iris-wei-org/my-doppelganger "Introduce yourself in one sentence."
 ```
 
 ## Configuration
-
-All SDKs and CLIs use:
 
 - `BOIDS_API_KEY`: required API key.
 - `BOIDS_MODEL`: optional default model for CLI commands.
 - `https://api.boids.so/v1`: default API base URL.
 
-Use environment variables in production rather than hard-coding API keys.
+## Repository Layout
+
+- `python/`: Python SDK and CLI package published as `boids-sdk`.
+- `js/`: JavaScript SDK and CLI package published as `boids-sdk`.
+- `go/`: Go SDK plus optional `cmd/boids` CLI.

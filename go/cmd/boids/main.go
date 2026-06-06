@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	boids "github.com/boids/boids-go"
+	boids "github.com/NevaMind-AI/boids-sdk/go"
 )
 
 func main() {
