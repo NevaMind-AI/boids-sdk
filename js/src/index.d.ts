@@ -9,6 +9,7 @@ export interface ResponseCreateParams {
   model: string;
   input: unknown;
   stream?: boolean;
+  previous_response_id?: string;
   [key: string]: unknown;
 }
 

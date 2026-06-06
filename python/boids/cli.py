@@ -32,6 +32,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     ask.add_argument("--json", action="store_true", help="Print raw JSON output.")
     ask.add_argument("--stream", dest="stream", action="store_true", default=True)
     ask.add_argument("--no-stream", dest="stream", action="store_false")
+    ask.add_argument("--previous-response-id", "--prev", dest="previous_response_id")
+    ask.add_argument("--show-response-id", action="store_true")
 
     search = subcommands.add_parser("search", help="Search Boids market agents.")
     search.add_argument("query", nargs="+")
@@ -49,6 +51,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     run.add_argument("--json", action="store_true", help="Print raw JSON output.")
     run.add_argument("--stream", dest="stream", action="store_true", default=True)
     run.add_argument("--no-stream", dest="stream", action="store_false")
+    run.add_argument("--previous-response-id", "--prev", dest="previous_response_id")
+    run.add_argument("--show-response-id", action="store_true")
     run.add_argument("--show-agent", dest="show_agent", action="store_true", default=True)
     run.add_argument("--quiet-agent", dest="show_agent", action="store_false")
 
@@ -60,6 +64,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     create.add_argument("-i", "--input")
     create.add_argument("--json", action="store_true", help="Print raw JSON output.")
     create.add_argument("--stream", action="store_true")
+    create.add_argument("--previous-response-id", "--prev", dest="previous_response_id")
+    create.add_argument("--show-response-id", action="store_true")
 
     args = parser.parse_args(argv)
 
@@ -72,8 +78,9 @@ def main(argv: Optional[list[str]] = None) -> int:
             model=model,
             input=input_text,
             stream=args.stream,
+            previous_response_id=args.previous_response_id,
         )
-        _print_result(result, as_json=args.json)
+        _print_result(result, as_json=args.json, show_response_id=args.show_response_id)
         return 0
 
     if args.command == "search":
@@ -89,9 +96,10 @@ def main(argv: Optional[list[str]] = None) -> int:
             search_query=args.search_query or input_text,
             limit=args.limit,
             stream=args.stream,
+            previous_response_id=args.previous_response_id,
             show_agent=args.show_agent and not args.json,
         )
-        _print_result(result, as_json=args.json)
+        _print_result(result, as_json=args.json, show_response_id=args.show_response_id)
         return 0
 
     if args.command == "responses" and args.response_command == "create":
@@ -105,8 +113,9 @@ def main(argv: Optional[list[str]] = None) -> int:
             model=model,
             input=input_text,
             stream=args.stream,
+            previous_response_id=args.previous_response_id,
         )
-        _print_result(result, as_json=args.json)
+        _print_result(result, as_json=args.json, show_response_id=args.show_response_id)
         return 0
 
     parser.error("Unknown command.")
@@ -123,6 +132,8 @@ def _run_shortcut(argv: list[str]) -> int:
     parser.add_argument("--json", action="store_true", help="Print raw JSON output.")
     parser.add_argument("--stream", dest="stream", action="store_true", default=True)
     parser.add_argument("--no-stream", dest="stream", action="store_false")
+    parser.add_argument("--previous-response-id", "--prev", dest="previous_response_id")
+    parser.add_argument("--show-response-id", action="store_true")
     parser.add_argument("model", help="Boids agent model, for example agent:@org/name.")
     parser.add_argument("input", nargs="+", help="Prompt text.")
 
@@ -132,8 +143,9 @@ def _run_shortcut(argv: list[str]) -> int:
         model=args.model,
         input=" ".join(args.input),
         stream=args.stream,
+        previous_response_id=args.previous_response_id,
     )
-    _print_result(result, as_json=args.json)
+    _print_result(result, as_json=args.json, show_response_id=args.show_response_id)
     return 0
 
 
@@ -144,7 +156,7 @@ def _looks_like_shortcut(argv: list[str]) -> bool:
 
 def _first_positional(argv: list[str]) -> Optional[str]:
     skip_next = False
-    options_with_values = {"--api-key", "--base-url"}
+    options_with_values = {"--api-key", "--base-url", "--previous-response-id", "--prev"}
 
     for item in argv:
         if skip_next:
@@ -155,7 +167,12 @@ def _first_positional(argv: list[str]) -> Optional[str]:
             skip_next = True
             continue
 
-        if item.startswith("--api-key=") or item.startswith("--base-url="):
+        if (
+            item.startswith("--api-key=")
+            or item.startswith("--base-url=")
+            or item.startswith("--previous-response-id=")
+            or item.startswith("--prev=")
+        ):
             continue
 
         if item.startswith("-"):
@@ -179,6 +196,7 @@ def _run_with_best_agent(
     search_query: str,
     limit: int,
     stream: bool,
+    previous_response_id: Optional[str],
     show_agent: bool,
 ) -> Any:
     search_result = client.market.search(query=search_query, limit=limit)
@@ -194,7 +212,12 @@ def _run_with_best_agent(
         title = item.get("title") or item.get("id") or model
         print(f"Selected agent: {title} ({model})", file=sys.stderr)
 
-    return client.responses.create(model=model, input=input_text, stream=stream)
+    return client.responses.create(
+        model=model,
+        input=input_text,
+        stream=stream,
+        previous_response_id=previous_response_id,
+    )
 
 
 def _print_search_result(result: Any, *, as_json: bool) -> None:
@@ -249,13 +272,15 @@ def _agent_model(item: dict[str, Any]) -> Optional[str]:
     return None
 
 
-def _print_result(result: Any, *, as_json: bool) -> None:
+def _print_result(result: Any, *, as_json: bool, show_response_id: bool = False) -> None:
     if isinstance(result, Iterable) and not isinstance(result, (dict, list, str, bytes)):
-        _print_stream(result, as_json=as_json)
+        _print_stream(result, as_json=as_json, show_response_id=show_response_id)
         return
 
     if as_json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
+        if show_response_id:
+            _print_response_id(result)
         return
 
     text = extract_text(result)
@@ -264,12 +289,25 @@ def _print_result(result: Any, *, as_json: bool) -> None:
     else:
         print(text)
 
+    if show_response_id:
+        _print_response_id(result)
 
-def _print_stream(events: Iterable[ResponseEvent], *, as_json: bool) -> None:
+
+def _print_stream(
+    events: Iterable[ResponseEvent],
+    *,
+    as_json: bool,
+    show_response_id: bool,
+) -> None:
     wrote_text = False
     fallback_text: Optional[str] = None
+    response_id: Optional[str] = None
 
     for event in events:
+        if event.event and event.event.endswith(".completed"):
+            fallback_text = extract_text(event.data)
+            response_id = extract_response_id(event.data)
+
         if as_json:
             print(json.dumps(event.to_dict(), ensure_ascii=False))
             continue
@@ -281,13 +319,27 @@ def _print_stream(events: Iterable[ResponseEvent], *, as_json: bool) -> None:
             wrote_text = True
             continue
 
-        if event.event and event.event.endswith(".completed"):
-            fallback_text = extract_text(event.data)
-
     if wrote_text:
         _write("\n")
     elif fallback_text:
         print(fallback_text)
+
+    if show_response_id and response_id:
+        print(f"Response ID: {response_id}", file=sys.stderr)
+
+
+def _print_response_id(value: Any) -> None:
+    response_id = extract_response_id(value)
+    if response_id:
+        print(f"Response ID: {response_id}", file=sys.stderr)
+
+
+def extract_response_id(value: Any) -> Optional[str]:
+    if isinstance(value, dict):
+        item = value.get("id")
+        if isinstance(item, str):
+            return item
+    return None
 
 
 def extract_delta(value: Any) -> Optional[str]:

@@ -46,6 +46,9 @@ func shortcut(args []string) error {
 	baseURL := flags.String("base-url", boids.DefaultBaseURL, "Boids API base URL")
 	stream := flags.Bool("stream", true, "Stream response events")
 	noStream := flags.Bool("no-stream", false, "Disable response streaming")
+	previousResponseID := flags.String("prev", "", "Previous response id for conversation context")
+	flags.StringVar(previousResponseID, "previous-response-id", "", "Previous response id for conversation context")
+	showResponseID := flags.Bool("show-response-id", false, "Print the response id to stderr")
 	jsonOutput := flags.Bool("json", false, "Print raw JSON")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -58,8 +61,13 @@ func shortcut(args []string) error {
 	model := flags.Arg(0)
 	input := strings.Join(flags.Args()[1:], " ")
 	client := boids.NewClient(*apiKey, boids.WithBaseURL(*baseURL))
-	request := boids.ResponseRequest{Model: model, Input: input, Stream: *stream && !*noStream}
-	return printResponse(context.Background(), client, request, *jsonOutput)
+	request := boids.ResponseRequest{
+		Model:              model,
+		Input:              input,
+		Stream:             *stream && !*noStream,
+		PreviousResponseID: *previousResponseID,
+	}
+	return printResponse(context.Background(), client, request, *jsonOutput, *showResponseID)
 }
 
 func ask(args []string) error {
@@ -69,6 +77,9 @@ func ask(args []string) error {
 	baseURL := flags.String("base-url", boids.DefaultBaseURL, "Boids API base URL")
 	stream := flags.Bool("stream", true, "Stream response events")
 	noStream := flags.Bool("no-stream", false, "Disable response streaming")
+	previousResponseID := flags.String("prev", "", "Previous response id for conversation context")
+	flags.StringVar(previousResponseID, "previous-response-id", "", "Previous response id for conversation context")
+	showResponseID := flags.Bool("show-response-id", false, "Print the response id to stderr")
 	jsonOutput := flags.Bool("json", false, "Print raw JSON")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -84,8 +95,13 @@ func ask(args []string) error {
 	}
 
 	client := boids.NewClient(*apiKey, boids.WithBaseURL(*baseURL))
-	request := boids.ResponseRequest{Model: *model, Input: input, Stream: *stream && !*noStream}
-	return printResponse(context.Background(), client, request, *jsonOutput)
+	request := boids.ResponseRequest{
+		Model:              *model,
+		Input:              input,
+		Stream:             *stream && !*noStream,
+		PreviousResponseID: *previousResponseID,
+	}
+	return printResponse(context.Background(), client, request, *jsonOutput, *showResponseID)
 }
 
 func searchMarket(args []string) error {
@@ -128,6 +144,9 @@ func runAuto(args []string) error {
 	limit := flags.Int("limit", 1, "Maximum number of agents to search")
 	stream := flags.Bool("stream", true, "Stream response events")
 	noStream := flags.Bool("no-stream", false, "Disable response streaming")
+	previousResponseID := flags.String("prev", "", "Previous response id for conversation context")
+	flags.StringVar(previousResponseID, "previous-response-id", "", "Previous response id for conversation context")
+	showResponseID := flags.Bool("show-response-id", false, "Print the response id to stderr")
 	jsonOutput := flags.Bool("json", false, "Print raw JSON")
 	quietAgent := flags.Bool("quiet-agent", false, "Do not print selected agent")
 	if err := flags.Parse(args); err != nil {
@@ -154,8 +173,13 @@ func runAuto(args []string) error {
 		fmt.Fprintf(os.Stderr, "Selected agent: %s (%s)\n", marketTitle(item, model), model)
 	}
 
-	request := boids.ResponseRequest{Model: model, Input: input, Stream: *stream && !*noStream}
-	return printResponse(context.Background(), client, request, *jsonOutput)
+	request := boids.ResponseRequest{
+		Model:              model,
+		Input:              input,
+		Stream:             *stream && !*noStream,
+		PreviousResponseID: *previousResponseID,
+	}
+	return printResponse(context.Background(), client, request, *jsonOutput, *showResponseID)
 }
 
 func createResponse(args []string) error {
@@ -165,6 +189,9 @@ func createResponse(args []string) error {
 	apiKey := flags.String("api-key", os.Getenv("BOIDS_API_KEY"), "Boids API key")
 	baseURL := flags.String("base-url", boids.DefaultBaseURL, "Boids API base URL")
 	stream := flags.Bool("stream", false, "Stream response events")
+	previousResponseID := flags.String("prev", "", "Previous response id for conversation context")
+	flags.StringVar(previousResponseID, "previous-response-id", "", "Previous response id for conversation context")
+	showResponseID := flags.Bool("show-response-id", false, "Print the response id to stderr")
 	jsonOutput := flags.Bool("json", false, "Print raw JSON")
 	if err := flags.Parse(args); err != nil {
 		return err
@@ -183,11 +210,16 @@ func createResponse(args []string) error {
 	}
 
 	client := boids.NewClient(*apiKey, boids.WithBaseURL(*baseURL))
-	request := boids.ResponseRequest{Model: *model, Input: inputText, Stream: *stream}
-	return printResponse(context.Background(), client, request, *jsonOutput)
+	request := boids.ResponseRequest{
+		Model:              *model,
+		Input:              inputText,
+		Stream:             *stream,
+		PreviousResponseID: *previousResponseID,
+	}
+	return printResponse(context.Background(), client, request, *jsonOutput, *showResponseID)
 }
 
-func printResponse(ctx context.Context, client *boids.Client, request boids.ResponseRequest, jsonOutput bool) error {
+func printResponse(ctx context.Context, client *boids.Client, request boids.ResponseRequest, jsonOutput bool, showResponseID bool) error {
 	if request.Stream {
 		stream, err := client.StreamResponse(ctx, request)
 		if err != nil {
@@ -197,8 +229,14 @@ func printResponse(ctx context.Context, client *boids.Client, request boids.Resp
 
 		wroteText := false
 		fallbackText := ""
+		responseID := ""
 		for stream.Next() {
 			event := stream.Event()
+			if strings.HasSuffix(event.Event, ".completed") {
+				fallbackText = extractText(event.Data)
+				responseID = extractResponseID(event.Data)
+			}
+
 			if jsonOutput {
 				if err := printJSON(event); err != nil {
 					return err
@@ -212,15 +250,14 @@ func printResponse(ctx context.Context, client *boids.Client, request boids.Resp
 				wroteText = true
 				continue
 			}
-
-			if strings.HasSuffix(event.Event, ".completed") {
-				fallbackText = extractText(event.Data)
-			}
 		}
 		if wroteText {
 			fmt.Println()
 		} else if fallbackText != "" {
 			fmt.Println(fallbackText)
+		}
+		if showResponseID && responseID != "" {
+			fmt.Fprintf(os.Stderr, "Response ID: %s\n", responseID)
 		}
 		return stream.Err()
 	}
@@ -231,7 +268,13 @@ func printResponse(ctx context.Context, client *boids.Client, request boids.Resp
 	}
 
 	if jsonOutput {
-		return printJSON(response)
+		if err := printJSON(response); err != nil {
+			return err
+		}
+		if showResponseID {
+			printResponseID(response)
+		}
+		return nil
 	}
 
 	text := extractText(response)
@@ -239,6 +282,9 @@ func printResponse(ctx context.Context, client *boids.Client, request boids.Resp
 		return printJSON(response)
 	}
 	fmt.Println(text)
+	if showResponseID {
+		printResponseID(response)
+	}
 	return nil
 }
 
@@ -373,13 +419,28 @@ func extractDelta(value any) string {
 	return ""
 }
 
+func extractResponseID(value any) string {
+	if item, ok := value.(map[string]any); ok {
+		if id, ok := item["id"].(string); ok {
+			return id
+		}
+	}
+	return ""
+}
+
+func printResponseID(value any) {
+	if responseID := extractResponseID(value); responseID != "" {
+		fmt.Fprintf(os.Stderr, "Response ID: %s\n", responseID)
+	}
+}
+
 func usage() {
 	fmt.Println(`Usage:
   boids <agent-model> <input>
   boids search <query> [-limit 5]
-  boids run <input> [-search-query <query>]
+  boids run <input> [-search-query <query>] [-prev <response-id>]
   boids ask -model <model> <input>
-  boids responses create -model <model> -input <input> [-stream]
+  boids responses create -model <model> -input <input> [-stream] [-prev <response-id>]
 
 Environment:
   BOIDS_API_KEY   Required API key

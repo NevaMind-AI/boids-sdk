@@ -65,6 +65,17 @@ boids ask --model agent:@iris-wei-org/my-doppelganger "Introduce yourself."
 boids responses create --model agent:@iris-wei-org/my-doppelganger --input "Introduce yourself." --stream
 ```
 
+Continue a conversation by passing the previous response id:
+
+```bash
+boids agent:@iris-wei-org/my-doppelganger "Remember my name is Ada." --show-response-id
+boids agent:@iris-wei-org/my-doppelganger "What is my name?" --prev resp_...
+```
+
+The CLI sends `previous_response_id` to `/v1/responses`. In stream mode,
+`--show-response-id` prints the completed response id to stderr so stdout stays
+clean for the assistant text.
+
 You can set a default model:
 
 ```bash
@@ -104,6 +115,21 @@ agents = client.market.search(query="global launch growth agent", limit=5)
 print(agents["data"]["items"][0]["model_name"])
 ```
 
+Conversation context:
+
+```python
+first = client.responses.create(
+    model="agent:@iris-wei-org/my-doppelganger",
+    input="Remember my name is Ada.",
+)
+
+second = client.responses.create(
+    model="agent:@iris-wei-org/my-doppelganger",
+    input="What is my name?",
+    previous_response_id=first["id"],
+)
+```
+
 ## JavaScript
 
 ```js
@@ -140,6 +166,21 @@ const agents = await client.market.search({
 console.log(agents.data.items[0].model_name);
 ```
 
+Conversation context:
+
+```js
+const first = await client.responses.create({
+  model: "agent:@iris-wei-org/my-doppelganger",
+  input: "Remember my name is Ada.",
+});
+
+const second = await client.responses.create({
+  model: "agent:@iris-wei-org/my-doppelganger",
+  input: "What is my name?",
+  previous_response_id: first.id,
+});
+```
+
 ## Go
 
 ```go
@@ -166,6 +207,25 @@ func main() {
 
 	fmt.Printf("%#v\n", response)
 }
+```
+
+Conversation context:
+
+```go
+first, err := client.CreateResponse(context.Background(), boids.ResponseRequest{
+	Model: "agent:@iris-wei-org/my-doppelganger",
+	Input: "Remember my name is Ada.",
+})
+if err != nil {
+	log.Fatal(err)
+}
+
+firstMap := first.(map[string]any)
+second, err := client.CreateResponse(context.Background(), boids.ResponseRequest{
+	Model:              "agent:@iris-wei-org/my-doppelganger",
+	Input:              "What is my name?",
+	PreviousResponseID: firstMap["id"].(string),
+})
 ```
 
 Run the Go CLI locally:

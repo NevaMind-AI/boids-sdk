@@ -28,8 +28,11 @@ async function main(argv) {
       model,
       input,
       stream: options.stream ?? true,
+      previous_response_id: options.previousResponseId,
     });
-    await printResult(result, Boolean(options.json));
+    await printResult(result, Boolean(options.json), {
+      showResponseId: Boolean(options.showResponseId),
+    });
     return 0;
   }
 
@@ -62,9 +65,12 @@ async function main(argv) {
       searchQuery: options.searchQuery ?? input,
       limit: Number(options.limit ?? 1),
       stream: options.stream ?? true,
+      previousResponseId: options.previousResponseId,
       showAgent: !options.quietAgent && !options.json,
     });
-    await printResult(result, Boolean(options.json));
+    await printResult(result, Boolean(options.json), {
+      showResponseId: Boolean(options.showResponseId),
+    });
     return 0;
   }
 
@@ -82,8 +88,11 @@ async function main(argv) {
       model,
       input,
       stream: Boolean(options.stream),
+      previous_response_id: options.previousResponseId,
     });
-    await printResult(result, Boolean(options.json));
+    await printResult(result, Boolean(options.json), {
+      showResponseId: Boolean(options.showResponseId),
+    });
     return 0;
   }
 
@@ -107,8 +116,11 @@ async function runShortcut(argv) {
     model,
     input,
     stream: options.stream ?? true,
+    previous_response_id: options.previousResponseId,
   });
-  await printResult(result, Boolean(options.json));
+  await printResult(result, Boolean(options.json), {
+    showResponseId: Boolean(options.showResponseId),
+  });
   return 0;
 }
 
@@ -143,6 +155,7 @@ async function runWithBestAgent(client, options) {
     model,
     input: options.input,
     stream: options.stream,
+    previous_response_id: options.previousResponseId,
   });
 }
 
@@ -191,12 +204,18 @@ function agentModel(item) {
   return undefined;
 }
 
-async function printResult(result, asJSON) {
+async function printResult(result, asJSON, { showResponseId = false } = {}) {
   if (isAsyncIterable(result)) {
     let wroteText = false;
     let fallbackText;
+    let responseId;
 
     for await (const event of result) {
+      if (event.event?.endsWith(".completed")) {
+        fallbackText = extractText(event.data);
+        responseId = extractResponseId(event.data);
+      }
+
       if (asJSON) {
         console.log(JSON.stringify(event));
         continue;
@@ -209,9 +228,6 @@ async function printResult(result, asJSON) {
         continue;
       }
 
-      if (event.event?.endsWith(".completed")) {
-        fallbackText = extractText(event.data);
-      }
     }
 
     if (wroteText) {
@@ -219,17 +235,26 @@ async function printResult(result, asJSON) {
     } else if (fallbackText) {
       console.log(fallbackText);
     }
+    if (showResponseId && responseId) {
+      console.error(`Response ID: ${responseId}`);
+    }
     return;
   }
 
   const value = await result;
   if (asJSON) {
     console.log(JSON.stringify(value, null, 2));
+    if (showResponseId) {
+      printResponseId(value);
+    }
     return;
   }
 
   const text = extractText(value);
   console.log(text ?? JSON.stringify(value, null, 2));
+  if (showResponseId) {
+    printResponseId(value);
+  }
 }
 
 function parseOptions(args, { envModel = true } = {}) {
@@ -244,6 +269,8 @@ function parseOptions(args, { envModel = true } = {}) {
       options.stream = false;
     } else if (arg === "--json") {
       options.json = true;
+    } else if (arg === "--show-response-id") {
+      options.showResponseId = true;
     } else if (arg === "--quiet-agent") {
       options.quietAgent = true;
     } else if (arg === "--show-agent") {
@@ -258,6 +285,8 @@ function parseOptions(args, { envModel = true } = {}) {
       options.searchQuery = args[++index];
     } else if (arg === "--limit") {
       options.limit = args[++index];
+    } else if (arg === "--previous-response-id" || arg === "--prev") {
+      options.previousResponseId = args[++index];
     } else if (arg === "--api-key") {
       options.apiKey = args[++index];
     } else if (arg === "--base-url") {
@@ -272,6 +301,10 @@ function parseOptions(args, { envModel = true } = {}) {
       options.searchQuery = arg.slice("--search-query=".length);
     } else if (arg.startsWith("--limit=")) {
       options.limit = arg.slice("--limit=".length);
+    } else if (arg.startsWith("--previous-response-id=")) {
+      options.previousResponseId = arg.slice("--previous-response-id=".length);
+    } else if (arg.startsWith("--prev=")) {
+      options.previousResponseId = arg.slice("--prev=".length);
     } else if (arg.startsWith("--api-key=")) {
       options.apiKey = arg.slice("--api-key=".length);
     } else if (arg.startsWith("--base-url=")) {
@@ -305,6 +338,20 @@ function extractDelta(value) {
   return undefined;
 }
 
+function extractResponseId(value) {
+  if (value && typeof value === "object" && typeof value.id === "string") {
+    return value.id;
+  }
+  return undefined;
+}
+
+function printResponseId(value) {
+  const responseId = extractResponseId(value);
+  if (responseId) {
+    console.error(`Response ID: ${responseId}`);
+  }
+}
+
 function looksLikeShortcut(args) {
   const first = firstPositional(args);
   return first !== undefined && !["ask", "responses", "search", "run", "auto"].includes(first);
@@ -323,6 +370,8 @@ function firstPositional(args) {
     "-q",
     "--search-query",
     "--limit",
+    "--previous-response-id",
+    "--prev",
   ]);
 
   for (const arg of args) {
@@ -343,7 +392,9 @@ function firstPositional(args) {
       arg.startsWith("--input=") ||
       arg.startsWith("--query=") ||
       arg.startsWith("--search-query=") ||
-      arg.startsWith("--limit=")
+      arg.startsWith("--limit=") ||
+      arg.startsWith("--previous-response-id=") ||
+      arg.startsWith("--prev=")
     ) {
       continue;
     }
@@ -362,9 +413,9 @@ function usage() {
   console.log(`Usage:
   boids <agent-model> <input>
   boids search <query> [--limit 5]
-  boids run <input> [--search-query <query>]
+  boids run <input> [--search-query <query>] [--prev <response-id>]
   boids ask --model <model> [--no-stream] <input>
-  boids responses create --model <model> --input <input> [--stream]
+  boids responses create --model <model> --input <input> [--stream] [--prev <response-id>]
 
 Environment:
   BOIDS_API_KEY   Required API key

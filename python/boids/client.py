@@ -48,12 +48,14 @@ class ResponsesResource:
         model: str,
         input: Any,
         stream: bool = False,
+        previous_response_id: Optional[str] = None,
         **params: Any,
     ) -> Any:
         body = dict(params)
         body["model"] = model
         body["input"] = input
         body["stream"] = stream
+        body["previous_response_id"] = previous_response_id
         return self._client._post("/responses", body, stream=stream)
 
 

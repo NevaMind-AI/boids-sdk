@@ -15,6 +15,8 @@ export BOIDS_API_KEY="..."
 boids agent:@iris-wei-org/my-doppelganger "Introduce yourself in one sentence."
 boids search "global launch growth agent" --limit 5
 boids run "Create a launch plan for a developer tool."
+boids agent:@iris-wei-org/my-doppelganger "Remember my name is Ada." --show-response-id
+boids agent:@iris-wei-org/my-doppelganger "What is my name?" --prev resp_...
 ```
 
 `boids run` searches `/v1/market/search`, selects the first returned agent, and
@@ -54,4 +56,19 @@ const agents = await client.market.search({
   limit: 5,
 });
 console.log(agents.data.items[0].model_name);
+```
+
+Conversation context:
+
+```js
+const first = await client.responses.create({
+  model: "agent:@iris-wei-org/my-doppelganger",
+  input: "Remember my name is Ada.",
+});
+
+const second = await client.responses.create({
+  model: "agent:@iris-wei-org/my-doppelganger",
+  input: "What is my name?",
+  previous_response_id: first.id,
+});
 ```

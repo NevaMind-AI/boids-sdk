@@ -65,10 +65,11 @@ func NewClient(apiKey string, options ...Option) *Client {
 }
 
 type ResponseRequest struct {
-	Model  string
-	Input  any
-	Stream bool
-	Extra  map[string]any
+	Model              string
+	Input              any
+	Stream             bool
+	PreviousResponseID string
+	Extra              map[string]any
 }
 
 type MarketSearchRequest struct {
@@ -166,6 +167,9 @@ func (client *Client) postResponse(ctx context.Context, responseRequest Response
 	body["model"] = responseRequest.Model
 	body["input"] = responseRequest.Input
 	body["stream"] = responseRequest.Stream
+	if responseRequest.PreviousResponseID != "" {
+		body["previous_response_id"] = responseRequest.PreviousResponseID
+	}
 
 	return client.post(ctx, "/responses", body)
 }
