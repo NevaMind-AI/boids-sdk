@@ -14,7 +14,7 @@ import (
 
 const (
 	DefaultBaseURL = "https://api.boids.so/v1"
-	userAgent     = "boids-go/0.1.0"
+	userAgent     = "boids-go/0.1.1"
 )
 
 type Client struct {

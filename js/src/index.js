@@ -1,5 +1,5 @@
 const DEFAULT_BASE_URL = "https://api.boids.so/v1";
-const USER_AGENT = "@boids/sdk-js/0.1.0";
+const USER_AGENT = "boids-sdk-js/0.1.1";
 
 export class BoidsError extends Error {
   constructor(message) {
